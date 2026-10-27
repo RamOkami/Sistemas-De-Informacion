@@ -34,10 +34,6 @@ En caso de que se ignoren scripts de construccion ejecutar lo siguiente y volver
 pnpm approve-builds
 pnpm install
 ```
-Crear archivo .env
-```bash
-Set-Content -Path .env -Value 'DATABASE_URL="postgresql://muni_user:muni_password123@localhost:5433/coquimbo_incidencias?schema=public"'
-```
 
 ### Paso 3 - Generacion de Prisma
 Generar el cliente de Prisma

@@ -4,6 +4,15 @@ let archivoCuadrillaValido = true;
 
 const API_URL = 'http://localhost:3000/incidencias';
 
+// Helper para convertir ID de cuadrilla de PostgreSQL a nombre legible
+function obtenerNombreCuadrilla(id) {
+  if (id === 1) return 'ASEO-01';
+  if (id === 2) return 'PARQ-01';
+  if (id === 3) return 'ALUM-01';
+  if (id === 4) return 'OPER-02';
+  return id ? `CUAD-${id}` : null;
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   await cargarIncidenciasDesdeBackend();
   buscarEstadoReclamo();
@@ -11,12 +20,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   actualizarSelectorCuadrilla();
 });
 
+// ==================== CARGAR DATOS DESDE NESTJS / POSTGRESQL ====================
 async function cargarIncidenciasDesdeBackend() {
   try {
     const respuesta = await fetch(API_URL);
     if (respuesta.ok) {
       const datos = await respuesta.json();
-      // Mapeamos el formato de la base de datos al formato que usa tu interfaz JS
       incidenciasDB = datos.map(i => ({
         id: i.id_incidencia,
         codigo: i.codigo_seguimiento,
@@ -29,7 +38,8 @@ async function cargarIncidenciasDesdeBackend() {
         jurisdiccionValida: i.jurisdiccion_valida,
         gravedad: i.gravedad,
         estado: i.estado,
-        cuadrilla: i.ordenes_trabajo?.id_cuadrilla ? `CUAD-${i.ordenes_trabajo.id_cuadrilla}` : null,
+        cuadrilla: i.ordenes_trabajo?.id_cuadrilla ? obtenerNombreCuadrilla(i.ordenes_trabajo.id_cuadrilla) : null,
+        idCuadrilla: i.ordenes_trabajo?.id_cuadrilla || null,
         fotoInicial: i.foto_inicial_url,
         fotoFinal: i.ordenes_trabajo?.foto_final_url || null,
         comentarioCierre: i.ordenes_trabajo?.comentario_cierre || null
@@ -40,7 +50,7 @@ async function cargarIncidenciasDesdeBackend() {
   }
 }
 
-// Selector de categoría táctil en el teléfono móvil
+// ==================== VISTA MÓVIL Y NAVEGACIÓN ====================
 function seleccionarCategoriaMovil(cat, btnElement) {
   document.getElementById('vecino-categoria').value = cat;
   document.querySelectorAll('.btn-cat-movil').forEach(btn => {
@@ -88,7 +98,6 @@ function actualizarFotoVecinoMovil(input) {
     nombre.className = 'block text-[10px] text-slate-500 mt-0.5';
     return;
   }
-
   nombre.textContent = archivo.name;
   nombre.className = 'block text-[10px] text-emerald-700 font-semibold mt-0.5 truncate';
 }
@@ -117,6 +126,7 @@ function enviarReporteVecinoMovil() {
   const nuevoId = Math.max(100, ...incidenciasDB.map(item => item.id)) + 1;
   const codigo = `CQ-2026-0${nuevoId}`;
   const extension = archivo.type === 'image/png' ? 'png' : 'jpg';
+  
   incidenciasDB.unshift({
     id: nuevoId,
     codigo,
@@ -196,7 +206,6 @@ function enfocarBuscadorCodigo() {
   input.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// Cambiar entre las 4 vistas superiores
 function cambiarVista(vista) {
   document.querySelectorAll('.role-view').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -213,11 +222,10 @@ function cambiarVista(vista) {
   if (vista === 'cuadrilla') actualizarSelectorCuadrilla();
 }
 
-// ==================== FUNCIONES DE VALIDACIÓN VISTA VECINO ====================
+// ==================== VALIDACIONES VECINO WEB ====================
 function setCoordenadasVecino(coords, sector, esValido) {
   document.getElementById('vecino-coords').value = coords;
   document.getElementById('vecino-sector').value = sector;
-  // Fallbacks de elementos originales
   const miniCoords = document.getElementById('coords-display-mini');
   if(miniCoords) miniCoords.textContent = coords;
   const miniSector = document.getElementById('sector-display-mini');
@@ -240,7 +248,7 @@ function setCoordenadasVecino(coords, sector, esValido) {
     if(pinLabel) pinLabel.textContent = 'Fuera de Coquimbo';
     mostrarAlertaFormulario(
       'error',
-      '<strong>Error Validación 1 (Geofencing GPS):</strong> Coordenadas (<code>-29.9027, -71.2519</code>) pertenecen a La Serena. Reporte descartado para el indicador <strong>TDT</strong>.'
+      '<strong>Error Validación 1 (Geofencing GPS):</strong> Coordenadas (<code>-29.9027, -71.2519</code>) pertenecen a La Serena. Reporte descartado.'
     );
   }
 }
@@ -291,6 +299,7 @@ function mostrarAlertaFormulario(tipo, htmlMsg) {
   alerta.innerHTML = htmlMsg;
 }
 
+// POST: Registrar nueva denuncia en PostgreSQL
 async function procesarEnvioVecino(e) {
   if (e) e.preventDefault();
   
@@ -331,7 +340,7 @@ async function procesarEnvioVecino(e) {
     });
 
     if (respuesta.ok) {
-      await cargarIncidenciasDesdeBackend(); // Recargar datos desde PostgreSQL
+      await cargarIncidenciasDesdeBackend();
       mostrarAlertaFormulario('ok', `¡Denuncia registrada con éxito en PostgreSQL! Código: <code>${nuevoCodigo}</code>`);
       renderizarTablaOIRS();
       notificarToast(`Denuncia ${nuevoCodigo} guardada en PostgreSQL`);
@@ -341,7 +350,6 @@ async function procesarEnvioVecino(e) {
   }
 }
 
-// Botones de simulación rápida en la barra superior
 function activarPruebaValidacion(num) {
   cambiarVista('vecino');
   if (num === 1) {
@@ -353,7 +361,7 @@ function activarPruebaValidacion(num) {
     actualizarContadorTexto();
     mostrarAlertaFormulario(
       'error',
-      '<strong>Error en Validación 3 (Campos y Categoría):</strong> La descripción tiene menos de 20 caracteres ("Basura en calle" = 15 caracteres). El formulario impide el envío a la base de datos.'
+      '<strong>Error en Validación 3 (Campos y Categoría):</strong> La descripción tiene menos de 20 caracteres.'
     );
   }
 }
@@ -398,13 +406,13 @@ function buscarEstadoReclamo() {
       </div>
       <span class="px-2.5 py-0.5 rounded-full font-bold text-[11px] ${colorBadge}">${item.estado.replace('_', ' ')}</span>
     </div>
-    <div class="space-y-1 text-slate-700">
+    <div class="space-y-1 text-slate-700 mt-2">
       <p><strong>Categoría:</strong> ${item.categoria} (${item.gravedad})</p>
       <p><strong>Ubicación:</strong> ${item.sector} <span class="font-mono text-[11px] text-slate-500">(${item.coords})</span></p>
       <p><strong>Cuadrilla asignada:</strong> ${item.cuadrilla ? `<span class="font-mono font-bold text-blue-700">${item.cuadrilla}</span>` : 'Pendiente de despacho'}</p>
     </div>
     ${item.comentarioCierre ? `
-      <div class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
+      <div class="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 mt-2">
         <p class="font-bold text-[11px] uppercase">✓ Detalle de Resolución / Cierre:</p>
         <p class="mt-0.5">${item.comentarioCierre}</p>
         ${item.fotoFinal ? `<p class="mt-1 font-mono text-[10px] text-emerald-700">📷 Evidencia adjunta: ${item.fotoFinal}</p>` : ''}
@@ -416,7 +424,8 @@ function buscarEstadoReclamo() {
 // ==================== BANDEJA OIRS / COORDINADOR ====================
 function renderizarTablaOIRS() {
   const tbody = document.getElementById('tbody-oirs');
-  const filtro = document.getElementById('filtro-bandeja-oirs').value;
+  const filtroElem = document.getElementById('filtro-bandeja-oirs');
+  const filtro = filtroElem ? filtroElem.value : 'TODAS';
   tbody.innerHTML = '';
 
   // Actualizar contadores superiores
@@ -476,17 +485,17 @@ function renderizarTablaOIRS() {
       <td class="p-3.5 align-top">
         ${item.estado === 'Resuelta' ? `
           <span class="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
-            <i class="ph ph-check-circle"></i> Cerrada por ${item.cuadrilla}
+            <i class="ph ph-check-circle"></i> Cerrada por ${item.cuadrilla || 'Cuadrilla'}
           </span>
         ` : item.estado.includes('Descartada') ? `
           <span class="text-slate-400 italic text-[11px]">Sin asignación</span>
         ` : `
           <div class="flex items-center gap-1.5">
             <select id="select-cuad-${item.id}" class="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white">
-              <option value="ASEO-01" ${item.cuadrilla === 'ASEO-01' ? 'selected' : ''}>ASEO-01 (Disp.)</option>
-              <option value="PARQ-01" ${item.cuadrilla === 'PARQ-01' ? 'selected' : ''}>PARQ-01 (Disp.)</option>
-              <option value="ALUM-01" ${item.cuadrilla === 'ALUM-01' ? 'selected' : ''}>ALUM-01 (Disp.)</option>
-              <option value="OPER-02" ${item.cuadrilla === 'OPER-02' ? 'selected' : ''}>OPER-02 (Disp.)</option>
+              <option value="1" ${item.idCuadrilla === 1 ? 'selected' : ''}>ASEO-01 (Disp.)</option>
+              <option value="2" ${item.idCuadrilla === 2 ? 'selected' : ''}>PARQ-01 (Disp.)</option>
+              <option value="3" ${item.idCuadrilla === 3 ? 'selected' : ''}>ALUM-01 (Disp.)</option>
+              <option value="4" ${item.idCuadrilla === 4 ? 'selected' : ''}>OPER-02 (Disp.)</option>
               <option value="ESPERA">-- Enviar a Lista Espera (24h) --</option>
             </select>
             <button onclick="despacharCuadrilla(${item.id})" class="bg-muni-navy hover:bg-muni-navyLight text-white font-bold px-2.5 py-1 rounded-lg text-xs transition">
@@ -500,47 +509,87 @@ function renderizarTablaOIRS() {
   });
 }
 
-function cambiarJurisdiccionOIRS(id, valor) {
-  const item = incidenciasDB.find(i => i.id === id);
-  if (!item) return;
-  if (valor === 'NO') {
-    item.jurisdiccionValida = false;
-    item.estado = 'Descartada_OIRS';
-    item.comentarioCierre = 'Descartada por Operador OIRS: El problema corresponde a una empresa externa (ej. Aguas del Valle / CGE). Se notificó al vecino.';
-    notificarToast(`Caso ${item.codigo} descartado por jurisdicción OIRS`, true);
-  } else {
-    item.jurisdiccionValida = true;
-    item.estado = 'En_Espera';
-    item.comentarioCierre = null;
-    notificarToast(`Caso ${item.codigo} validado y pasado a Lista de Espera`);
+// 1. PATCH: Cambiar Jurisdicción (Punto 1 OIRS)
+async function cambiarJurisdiccionOIRS(id, valor) {
+  const esValida = valor === 'SI';
+  try {
+    const respuesta = await fetch(`${API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        jurisdiccion_valida: esValida,
+        estado: esValida ? 'En_Espera' : 'Descartada_OIRS'
+      })
+    });
+
+    if (respuesta.ok) {
+      await cargarIncidenciasDesdeBackend();
+      renderizarTablaOIRS();
+      actualizarSelectorCuadrilla();
+      notificarToast(
+        esValida 
+          ? `Incidencia #${id} reactivada (Lista de Espera)` 
+          : `Incidencia #${id} descartada por OIRS`, 
+        !esValida
+      );
+    }
+  } catch (error) {
+    console.error('Error al actualizar jurisdicción:', error);
+    notificarToast('Error al conectar con la API en NestJS', true);
   }
-  renderizarTablaOIRS();
 }
 
-function cambiarGravedadOIRS(id, nuevaGravedad) {
-  const item = incidenciasDB.find(i => i.id === id);
-  if (!item) return;
-  item.gravedad = nuevaGravedad;
-  notificarToast(`Gravedad de ${item.codigo} actualizada a ${nuevaGravedad}`);
-  renderizarTablaOIRS();
+// 2. PATCH: Cambiar Gravedad (Punto 2 OIRS)
+async function cambiarGravedadOIRS(id, nuevaGravedad) {
+  try {
+    const respuesta = await fetch(`${API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gravedad: nuevaGravedad })
+    });
+
+    if (respuesta.ok) {
+      await cargarIncidenciasDesdeBackend();
+      renderizarTablaOIRS();
+      notificarToast(`Gravedad de #${id} actualizada a ${nuevaGravedad}`);
+    }
+  } catch (error) {
+    console.error('Error al actualizar gravedad:', error);
+    notificarToast('Error al conectar con la API en NestJS', true);
+  }
 }
 
-function despacharCuadrilla(id) {
-  const item = incidenciasDB.find(i => i.id === id);
+// 3. PATCH: Asignar Cuadrilla (Punto 3 OIRS)
+async function despacharCuadrilla(id) {
   const select = document.getElementById(`select-cuad-${id}`);
-  if (!item || !select) return;
+  if (!select) return;
 
-  if (select.value === 'ESPERA') {
-    item.estado = 'En_Espera';
-    item.cuadrilla = null;
-    notificarToast(`${item.codigo} enviado a Lista de Espera (Temporizador 24h activo)`);
-  } else {
-    item.estado = 'Asignada';
-    item.cuadrilla = select.value;
-    notificarToast(`Orden ${item.codigo} asignada a cuadrilla ${select.value}`);
+  const valor = select.value;
+
+  try {
+    let payload = {};
+    if (valor === 'ESPERA') {
+      payload = { estado: 'En_Espera' };
+    } else {
+      payload = { id_cuadrilla: parseInt(valor, 10) };
+    }
+
+    const respuesta = await fetch(`${API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (respuesta.ok) {
+      await cargarIncidenciasDesdeBackend();
+      renderizarTablaOIRS();
+      actualizarSelectorCuadrilla();
+      notificarToast(valor === 'ESPERA' ? `Orden #${id} enviada a Lista de Espera` : `Cuadrilla asignada a incidencia #${id}`);
+    }
+  } catch (error) {
+    console.error('Error al despachar cuadrilla:', error);
+    notificarToast('Error al guardar cuadrilla en PostgreSQL', true);
   }
-  renderizarTablaOIRS();
-  actualizarSelectorCuadrilla();
 }
 
 // ==================== VISTA MÓVIL CUADRILLA EN TERRENO ====================
@@ -565,8 +614,13 @@ function cargarFichaCuadrilla() {
   const container = document.getElementById('ficha-cuadrilla-body');
   if (!select || !container) return;
 
-  const id = parseInt(select.value);
-  const item = incidenciasDB.find(i => i.id === id) || incidenciasDB[1];
+  const id = parseInt(select.value, 10);
+  const item = incidenciasDB.find(i => i.id === id) || incidenciasDB[0];
+
+  if (!item) {
+    container.innerHTML = '<p class="text-slate-500 italic p-4">No hay ordenes de trabajo pendientes asignadas.</p>';
+    return;
+  }
 
   container.innerHTML = `
     <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -581,7 +635,6 @@ function cargarFichaCuadrilla() {
       <p class="text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 italic">"${item.descripcion}"</p>
     </div>
 
-    <!-- Selector de Estado en Terreno -->
     <div>
       <label class="font-bold text-slate-700 block mb-1 uppercase text-[11px]">1. Actualizar Estado en Terreno</label>
       <select id="cuadrilla-estado-select" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white font-bold text-muni-navy">
@@ -590,7 +643,6 @@ function cargarFichaCuadrilla() {
       </select>
     </div>
 
-    <!-- Carga Obligatoria de Foto del Después (Validación 2 en Cierre) -->
     <div class="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-2">
       <div class="flex justify-between items-center">
         <label class="font-bold text-emerald-950 uppercase text-[11px]">2. Foto Obligatoria del "Después" *</label>
@@ -604,7 +656,7 @@ function cargarFichaCuadrilla() {
     </div>
 
     <div id="alerta-cierre-cuadrilla" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[11px]">
-      <strong>Bloqueo de Cierre (Validación 2):</strong> El sistema impide pasar la orden a "Resuelta" si la cuadrilla no adjunta la fotografía verificada del trabajo terminado.
+      <strong>Bloqueo de Cierre:</strong> El sistema impide pasar la orden a "Resuelta" si la cuadrilla no adjunta la fotografía verificada.
     </div>
 
     <div>
@@ -614,7 +666,7 @@ function cargarFichaCuadrilla() {
 
     <button onclick="cerrarOrdenTrabajo(${item.id})" class="w-full bg-muni-emerald hover:bg-muni-emeraldDark text-white font-bold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-xs">
       <i class="ph ph-check-square-offset text-base"></i>
-      <span>Cerrar Orden y Notificar por Correo al Vecino</span>
+      <span>Cerrar Orden y Notificar al Vecino</span>
     </button>
   `;
   archivoCuadrillaValido = true;
@@ -639,7 +691,8 @@ function simularFotoCuadrilla(valido) {
   }
 }
 
-function cerrarOrdenTrabajo(id) {
+// PATCH: Cerrar orden desde la vista de Cuadrilla
+async function cerrarOrdenTrabajo(id) {
   if (!archivoCuadrillaValido) {
     document.getElementById('alerta-cierre-cuadrilla').classList.remove('hidden');
     notificarToast('No se puede cerrar la orden sin fotografía final', true);
@@ -649,13 +702,26 @@ function cerrarOrdenTrabajo(id) {
   const item = incidenciasDB.find(i => i.id === id);
   if (!item) return;
 
-  item.estado = 'Resuelta';
-  item.fotoFinal = document.getElementById('input-foto-cierre').value;
-  item.comentarioCierre = document.getElementById('comentario-cuadrilla-input').value;
+  try {
+    const respuesta = await fetch(`${API_URL}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        estado: 'Resuelta'
+      })
+    });
 
-  notificarToast(`Orden ${item.codigo} cerrada con foto. Vecino notificado.`);
-  actualizarSelectorCuadrilla();
-  buscarEstadoReclamo();
+    if (respuesta.ok) {
+      await cargarIncidenciasDesdeBackend();
+      renderizarTablaOIRS();
+      actualizarSelectorCuadrilla();
+      buscarEstadoReclamo();
+      notificarToast(`Orden ${item.codigo} cerrada en PostgreSQL`);
+    }
+  } catch (error) {
+    console.error('Error al cerrar la orden:', error);
+    notificarToast('Error al conectar con la API en NestJS', true);
+  }
 }
 
 function notificarToast(texto, esError = false) {
