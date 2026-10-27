@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model cuadrillas {
+  id_cuadrilla     Int               @id @default(autoincrement())
+  id_departamento  Int?
+  codigo_cuadrilla String            @unique @db.VarChar(30)
+  responsable      String            @db.VarChar(100)
+  disponible       Boolean?          @default(true)
+  departamentos    departamentos?    @relation(fields: [id_departamento], references: [id_departamento], onUpdate: NoAction)
+  ordenes_trabajo  ordenes_trabajo[]
+}
+
+model departamentos {
+  id_departamento Int           @id @default(autoincrement())
+  nombre_depto    String        @db.VarChar(80)
+  encargado       String        @db.VarChar(100)
+  cuadrillas      cuadrillas[]
+  incidencias     incidencias[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model incidencias {
+  id_incidencia       Int              @id @default(autoincrement())
+  codigo_seguimiento  String           @unique @db.VarChar(30)
+  fecha_ingreso       DateTime?        @default(now()) @db.Timestamp(6)
+  categoria           String           @db.VarChar(50)
+  sector              String           @db.VarChar(255)
+  latitud             Decimal          @db.Decimal(10, 8)
+  longitud            Decimal          @db.Decimal(11, 8)
+  dentro_de_coquimbo  Boolean?         @default(true)
+  descripcion         String
+  jurisdiccion_valida Boolean?         @default(true)
+  gravedad            String?          @default("Rutina") @db.VarChar(20)
+  estado              String?          @default("Ingresada") @db.VarChar(30)
+  foto_inicial_url    String           @db.VarChar(255)
+  id_departamento     Int?
+  departamentos       departamentos?   @relation(fields: [id_departamento], references: [id_departamento], onUpdate: NoAction)
+  ordenes_trabajo     ordenes_trabajo?
+}
+
+model ordenes_trabajo {
+  id_orden          Int          @id @default(autoincrement())
+  id_incidencia     Int?         @unique
+  id_cuadrilla      Int?
+  fecha_asignacion  DateTime?    @default(now()) @db.Timestamp(6)
+  fecha_cierre      DateTime?    @db.Timestamp(6)
+  foto_final_url    String?      @db.VarChar(255)
+  comentario_cierre String?
+  cuadrillas        cuadrillas?  @relation(fields: [id_cuadrilla], references: [id_cuadrilla], onUpdate: NoAction)
+  incidencias       incidencias? @relation(fields: [id_incidencia], references: [id_incidencia], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model usuarios {
+  id_usuario Int      @id @default(autoincrement())
+  nombre     String   @db.VarChar(100)
+  correo     String   @unique @db.VarChar(100)
+  password   String   @db.VarChar(255)
+  rol        String   @db.VarChar(30)
+  activo     Boolean? @default(true)
+}
